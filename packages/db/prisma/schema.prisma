@@ -20,11 +20,13 @@ enum UserRole {
 }
 
 enum OrderStatus {
-  PENDING
-  CONFIRMED
+  CREATED
+  PAYMENT_PENDING
+  PAID
   PROCESSING
   SHIPPED
   DELIVERED
+  COMPLETED
   CANCELLED
   REFUNDED
 }
@@ -51,33 +53,64 @@ enum NotificationType {
   SYSTEM
 }
 
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum EscrowStatus {
+  HELD
+  RELEASED
+  REFUNDED
+}
+
 // ── Models ───────────────────────────────────────────────────
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  passwordHash  String
-  firstName     String
-  lastName      String
-  phone         String?
-  avatarUrl     String?
-  role          UserRole @default(BUYER)
-  emailVerified Boolean  @default(false)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  passwordHash        String
+  firstName           String
+  lastName            String
+  phone               String?
+  avatarUrl           String?
+  role                UserRole @default(BUYER)
+  emailVerified       Boolean  @default(false)
+  emailVerifyToken    String?  @unique
+  passwordResetToken  String?  @unique
+  isActive            Boolean  @default(true)
+  country             String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   // Relations
   addresses     Address[]
-  products      Product[]            // produits mis en vente (vendeur)
-  orders        Order[]              // commandes passées (acheteur)
+  products      Product[]
+  orders        Order[]
   reviews       Review[]
   notifications Notification[]
   payments      PaymentTransaction[]
+  refreshTokens RefreshToken[]
 
   @@index([email])
   @@index([role])
   @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("refresh_tokens")
 }
 
 model Category {
@@ -90,7 +123,6 @@ model Category {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
   parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
   children Category[] @relation("CategoryTree")
   products Product[]
@@ -101,57 +133,72 @@ model Category {
 }
 
 model Product {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   name        String
-  slug        String   @unique
+  slug        String        @unique
   description String
-  price       Decimal  @db.Decimal(10, 2)
-  compareAt   Decimal? @db.Decimal(10, 2)
-  sku         String?  @unique
-  stock       Int      @default(0)
-  images      String[] // tableau d'URLs
-  isPublished Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  priceFcfa   Int
+  priceUsd    Decimal       @db.Decimal(10, 2)
+  compareAt   Decimal?      @db.Decimal(10, 2)
+  sku         String?       @unique
+  stock       Int           @default(0)
+  images      String[]
+  status      ProductStatus @default(DRAFT)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
-  // Clés étrangères
   sellerId   String
   categoryId String
 
-  // Relations
-  seller     User        @relation(fields: [sellerId], references: [id])
-  category   Category    @relation(fields: [categoryId], references: [id])
+  seller     User              @relation(fields: [sellerId], references: [id])
+  category   Category          @relation(fields: [categoryId], references: [id])
+  variants   ProductVariant[]
   orderItems OrderItem[]
   reviews    Review[]
 
   @@index([slug])
   @@index([sellerId])
   @@index([categoryId])
-  @@index([isPublished, createdAt])
+  @@index([status, createdAt])
+  @@index([priceFcfa])
   @@map("products")
+}
+
+model ProductVariant {
+  id       String  @id @default(cuid())
+  size     String?
+  color    String?
+  quantity Int     @default(0)
+  sku      String? @unique
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_variants")
 }
 
 model Order {
   id              String      @id @default(cuid())
-  orderNumber     String      @unique @default(cuid())
-  status          OrderStatus @default(PENDING)
+  orderNumber     String      @unique
+  status          OrderStatus @default(CREATED)
   subtotal        Decimal     @db.Decimal(10, 2)
   shippingCost    Decimal     @default(0) @db.Decimal(10, 2)
   tax             Decimal     @default(0) @db.Decimal(10, 2)
   total           Decimal     @db.Decimal(10, 2)
+  currency        String      @default("XOF")
   notes           String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  // Clés étrangères
-  buyerId          String
+  buyerId           String
   shippingAddressId String
 
-  // Relations
   buyer            User                @relation(fields: [buyerId], references: [id])
   shippingAddress  Address             @relation(fields: [shippingAddressId], references: [id])
   items            OrderItem[]
   payment          PaymentTransaction?
+  escrow           EscrowTransaction?
 
   @@index([buyerId])
   @@index([status])
@@ -166,11 +213,9 @@ model OrderItem {
   unitPrice Decimal @db.Decimal(10, 2)
   total     Decimal @db.Decimal(10, 2)
 
-  // Clés étrangères
   orderId   String
   productId String
 
-  // Relations
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
 
@@ -179,22 +224,36 @@ model OrderItem {
   @@map("order_items")
 }
 
+model EscrowTransaction {
+  id         String       @id @default(cuid())
+  amount     Decimal      @db.Decimal(10, 2)
+  currency   String       @default("XOF")
+  status     EscrowStatus @default(HELD)
+  heldAt     DateTime     @default(now())
+  releasedAt DateTime?
+  refundedAt DateTime?
+
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  @@index([status])
+  @@map("escrow_transactions")
+}
+
 model Review {
   id        String   @id @default(cuid())
-  rating    Int      // 1-5
+  rating    Int
   comment   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Clés étrangères
   userId    String
   productId String
 
-  // Relations
   user    User    @relation(fields: [userId], references: [id])
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, productId]) // un seul avis par utilisateur par produit
+  @@unique([userId, productId])
   @@index([productId])
   @@index([rating])
   @@map("reviews")
@@ -202,7 +261,7 @@ model Review {
 
 model Address {
   id         String  @id @default(cuid())
-  label      String? // "Domicile", "Bureau", etc.
+  label      String?
   street     String
   city       String
   state      String?
@@ -210,10 +269,8 @@ model Address {
   country    String
   isDefault  Boolean @default(false)
 
-  // Clés étrangères
   userId String
 
-  // Relations
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   orders Order[]
 
@@ -227,16 +284,14 @@ model PaymentTransaction {
   currency      String        @default("XOF")
   method        PaymentMethod
   status        PaymentStatus @default(PENDING)
-  providerRef   String?       // référence du fournisseur de paiement
-  metadata      Json?         // données supplémentaires du provider
+  providerRef   String?
+  metadata      Json?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  // Clés étrangères
   orderId String @unique
   userId  String
 
-  // Relations
   order Order @relation(fields: [orderId], references: [id])
   user  User  @relation(fields: [userId], references: [id])
 
@@ -252,13 +307,11 @@ model Notification {
   title     String
   message   String
   isRead    Boolean          @default(false)
-  data      Json?            // payload contextuel
+  data      Json?
   createdAt DateTime         @default(now())
 
-  // Clés étrangères
   userId String
 
-  // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])

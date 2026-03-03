@@ -1,61 +1,113 @@
-# Bonjour ! Je suis Machiavel KOUAME
+# COWRI - Marketplace Monorepo
 
-## À propos de moi
+Cowri est une marketplace africaine construite avec une architecture monorepo moderne utilisant **Turborepo**.
 
-Je suis un développeur web passionné, spécialisé en développement web full stack avec une expertise polyvalente dans un large éventail de technologies.
-Avec un an d'expérience dans le domaine, j'ai acquis une solide compréhension des principes fondamentaux du développement web 
-et j'ai démontré ma capacité à créer des solutions innovantes et efficaces.
+## Architecture
 
-Ma boîte à outils comprend des technologies essentielles telles que HTML, CSS et JavaScript, qui constituent les fondations du web. 
-En outre, je maîtrise également des langages de programmation dynamiques tels que Python, ainsi que des frameworks modernes tels que React.js et Express.js. 
-Cette expertise me permet de concevoir des interfaces utilisateur réactives et des applications web robustes, tout en assurant une expérience utilisateur optimale.
+```
+cowri/
+├── apps/
+│   ├── web/          # Frontend - Next.js 14 + TypeScript + Tailwind CSS
+│   └── api/          # Backend  - NestJS + Prisma + Swagger
+├── packages/
+│   ├── ui/           # Composants UI partagés (shadcn/ui + CVA)
+│   ├── db/           # Schéma Prisma + client de base de données
+│   └── config/       # Configurations partagées (ESLint, Prettier, TypeScript)
+├── turbo.json        # Configuration Turborepo
+├── pnpm-workspace.yaml
+└── package.json
+```
 
-En ce qui concerne les bases de données, je suis à l'aise avec SQL, MySQL et MongoDB, ce qui me permet de créer et de gérer des bases de données relationnelles
-et non relationnelles en fonction des besoins du projet. De plus, je suis un utilisateur expérimenté de Git, ce qui garantit un contrôle de version efficace et
-une collaboration transparente au sein de l'équipe de développement.
+### Apps
 
-Mon objectif est de collaborer avec des entreprises innovantes et des particuliers ambitieux pour créer des produits web de haute qualité qui répondent aux besoins de leurs utilisateurs 
-et qui contribuent à leur succès sur le marché. Je suis passionné par l'apprentissage continu et je suis toujours à la recherche de nouvelles opportunités pour relever des défis stimulants 
-et pour élargir mes compétences.
+| App | Stack | Port | Description |
+|-----|-------|------|-------------|
+| `@cowri/web` | Next.js 14, Tailwind CSS, TypeScript | 3000 | Interface utilisateur de la marketplace |
+| `@cowri/api` | NestJS, Prisma, Swagger | 4000 | API REST avec documentation OpenAPI |
 
-Si vous recherchez un développeur web dynamique et compétent pour votre prochain projet, n'hésitez pas à me contacter. 
-Je suis enthousiaste à l'idée de discuter de la façon dont je peux contribuer à votre succès !
+### Packages
 
-## Mes compétences
+| Package | Description |
+|---------|-------------|
+| `@cowri/ui` | Bibliothèque de composants React basée sur shadcn/ui (Button, Card, Input, Badge) |
+| `@cowri/db` | Schéma Prisma complet et client singleton pour PostgreSQL |
+| `@cowri/config` | Configurations ESLint, Prettier et TypeScript partagées entre tous les workspaces |
 
-- Langages de programmation : HTML, CSS, JavaScript, Python
-- Frameworks : React.js, Express.js, Django
-- Bases de données : MySQL, SQL, MongoDB, Firebase
-- Outil de développement : Git
+## Modèle de données
 
-## Mes projets récents
+Le schéma Prisma inclut les entités suivantes :
 
-- [Projet 1](machiavel-kouame.com) :
-  Il s'agit de mon portfolio qui présente mes compétences en tant que Developpeur Web.
- 
-- [Projet 2](ankh-shop.machiavel-kouame.com) :
-  Sites e-commerce soigneusement élaborés, mettant en avant des designs intuitifs,
-  des mises en page percutantes et des solutions novatrices pour une expérience d'achat mémorable.
-  Bienvenue dans un monde où le commerce électronique devient une fusion harmonieuse entre la forme et la fonction,
-  créant des voyages interactifs et visuels uniques.
-  
-- [Projet 3](ankh-bank.machiavel-kouame.com) :
-  Site Web entièrement responsive avec une interface utilisateur UI/UX moderne,
-  développé en React JS avec Tailwind CSS qui permet aux utilisateurs de transactions financières en ligne.
+- **User** - Acheteurs, vendeurs et administrateurs
+- **Shop** - Profil de boutique pour les vendeurs
+- **Category** - Catégories hiérarchiques (parent/enfant)
+- **Product** - Produits avec images, prix et stock
+- **ProductImage** - Images associées aux produits
+- **Order** - Commandes avec statut de suivi
+- **OrderItem** - Lignes de commande
+- **Address** - Adresses de livraison
+- **Review** - Avis et notes des acheteurs
+- **PaymentTransaction** - Transactions de paiement (Mobile Money, carte, virement)
 
-## Comment me contacter
+## Prérequis
 
-Vous pouvez me contacter par email à [popoin61@gmail.com](popoin61@gmail.com) 
+- **Node.js** >= 18
+- **pnpm** >= 9
+- **PostgreSQL** >= 15
 
-## Mes disponibilités
+## Démarrage rapide
 
-Je suis actuellement ouvert aux opportunités de collaboration avec des particuliers et des entreprises. Si vous recherchez un développeur web talentueux pour votre prochain projet, n'hésitez pas à me contacter !
+```bash
+# 1. Installer les dépendances
+pnpm install
 
-## Fun fact
+# 2. Configurer les variables d'environnement
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
 
-J'adore résoudre des énigmes de code en buvant une tasse de café bien chaud !
+# 3. Générer le client Prisma
+pnpm db:generate
 
----
+# 4. Appliquer le schéma à la base de données
+pnpm db:push
 
-Merci d'avoir pris le temps de découvrir mon profil. J'ai hâte de travailler avec vous sur des projets passionnants !
+# 5. Lancer en développement
+pnpm dev
+```
 
+## Scripts disponibles
+
+| Commande | Description |
+|----------|-------------|
+| `pnpm dev` | Lancer tous les apps en mode développement |
+| `pnpm build` | Build de production pour tous les workspaces |
+| `pnpm lint` | Linter tout le code avec ESLint |
+| `pnpm format` | Formatter le code avec Prettier |
+| `pnpm format:check` | Vérifier le formatage sans modifier |
+| `pnpm db:generate` | Générer le client Prisma |
+| `pnpm db:push` | Synchroniser le schéma avec la base de données |
+| `pnpm clean` | Nettoyer les dossiers de build et caches |
+
+## API Documentation
+
+L'API expose une documentation Swagger accessible à :
+```
+http://localhost:4000/api/docs
+```
+
+### Endpoints principaux
+
+- `POST /api/v1/auth/register` - Inscription
+- `POST /api/v1/auth/login` - Connexion
+- `GET /api/v1/products` - Liste des produits
+- `GET /api/v1/categories` - Liste des catégories
+- `GET /api/v1/orders` - Commandes utilisateur
+- `GET /api/v1/reviews/product/:id` - Avis d'un produit
+
+## Stack technique
+
+- **Monorepo** : Turborepo + pnpm workspaces
+- **Frontend** : Next.js 14 (App Router), Tailwind CSS, shadcn/ui
+- **Backend** : NestJS 10, Prisma ORM, Passport JWT
+- **Base de données** : PostgreSQL
+- **Qualité de code** : ESLint, Prettier, TypeScript strict
+- **Paiement** : Support Mobile Money (XOF), carte bancaire, virement

@@ -4,8 +4,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Inject, forwardRef } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PaymentsService } from '../payments/payments.service';
 import { CreateOrderDto, UpdateOrderStatusDto } from './dto';
 
 /** Valid status transitions */
@@ -22,7 +24,11 @@ const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => PaymentsService))
+    private readonly paymentsService: PaymentsService,
+  ) {}
 
   // ── Generate order number: COWRI-CI-2026-XXXXX ──────────────────────
 
@@ -205,19 +211,11 @@ export class OrdersService {
     if (dto.status === OrderStatus.DELIVERED) updateData.deliveredAt = new Date();
     if (dto.status === OrderStatus.COMPLETED) updateData.completedAt = new Date();
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.order.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.order.update({
         where: { id: orderId },
         data: updateData,
       });
-
-      // Release escrow when order is COMPLETED
-      if (dto.status === OrderStatus.COMPLETED && order.escrow) {
-        await tx.escrow.update({
-          where: { id: order.escrow.id },
-          data: { status: 'RELEASED', releasedAt: new Date() },
-        });
-      }
 
       // Refund escrow on cancellation after payment
       if (
@@ -231,8 +229,20 @@ export class OrdersService {
         });
       }
 
-      return updated;
+      return result;
     });
+
+    // After delivery confirmed: schedule 48h escrow release + 7d auto-release
+    if (dto.status === OrderStatus.DELIVERED) {
+      await this.paymentsService.scheduleAutoRelease(orderId);
+    }
+
+    // Buyer explicitly completes: schedule 48h escrow release
+    if (dto.status === OrderStatus.COMPLETED) {
+      await this.paymentsService.scheduleEscrowRelease(orderId);
+    }
+
+    return updated;
   }
 
   // ── Find One ────────────────────────────────────────────────────────

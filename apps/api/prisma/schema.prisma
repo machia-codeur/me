@@ -133,8 +133,10 @@ model Order {
   totalFCFA Int @map("total_fcfa")
   totalUSD  Int @map("total_usd")
 
-  items  OrderItem[]
-  escrow Escrow?
+  items    OrderItem[]
+  escrow   Escrow?
+  payments Payment[]
+  disputes Dispute[]
 
   shippingAddress String? @map("shipping_address")
   trackingNumber  String? @map("tracking_number")
@@ -192,7 +194,8 @@ model Escrow {
   holderId String @map("holder_id")
   holder   User   @relation(fields: [holderId], references: [id])
 
-  releasedAt DateTime? @map("released_at")
+  releaseScheduledAt DateTime? @map("release_scheduled_at")
+  releasedAt         DateTime? @map("released_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -202,6 +205,66 @@ model Escrow {
 
 enum EscrowStatus {
   HOLDING
+  RELEASE_SCHEDULED
   RELEASED
+  DISPUTED
   REFUNDED
+}
+
+// ─── PAYMENTS ────────────────────────────────────────────────────────────────
+
+model Payment {
+  id            String        @id @default(uuid())
+  provider      String        // "cinetpay" | "flutterwave"
+  transactionId String        @unique @map("transaction_id")
+  status        PaymentStatus @default(PENDING)
+  amount        Int
+  currency      String        // "XOF", "USD"
+
+  orderId String @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  paymentUrl String? @map("payment_url")
+  rawData    Json?   @map("raw_data")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+model Dispute {
+  id     String        @id @default(uuid())
+  reason String
+  status DisputeStatus @default(OPEN)
+
+  orderId  String @map("order_id")
+  order    Order  @relation(fields: [orderId], references: [id])
+  openedBy String @map("opened_by")
+
+  resolvedBy     String?   @map("resolved_by")
+  resolution     String?
+  resolvedAt     DateTime? @map("resolved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@map("disputes")
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED_BUYER
+  RESOLVED_SELLER
+  CLOSED
 }

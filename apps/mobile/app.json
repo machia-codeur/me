@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "COWRI",
+    "slug": "cowri-mobile",
+    "version": "1.0.0",
+    "scheme": "cowri",
+    "platforms": ["ios", "android"],
+    "icon": "./assets/icon.png",
+    "splash": {
+      "backgroundColor": "#f97316"
+    },
+    "plugins": ["expo-router"]
+  }
+}

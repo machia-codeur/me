@@ -1,0 +1,14 @@
+{
+  "name": "cowri",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:seller": "npm -w apps/seller run dev",
+    "dev:mobile": "npm -w apps/mobile run start",
+    "build:seller": "npm -w apps/seller run build",
+    "lint": "npm -w apps/seller run lint"
+  }
+}
